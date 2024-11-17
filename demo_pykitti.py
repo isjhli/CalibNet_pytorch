@@ -10,6 +10,7 @@ basedir = "data"
 seq = "00"
 
 data = pykitti.odometry(basedir, seq)
+print(len(data))
 
 '''
 calib: 具名元组
@@ -45,7 +46,7 @@ pcd = intern @ pcd[:3, :]
 u, v, w = pcd[0, :], pcd[1, :], pcd[2, :]
 u = u / w
 v = v / w
-rev = (0 <= u) * (u < W) * (0 <= v) * (v < H) * (w > 0)
+rev = (u >= 0) * (u < W) * (v >= 0) * (v < H) * (w > 0)
 u = u[rev]
 v = v[rev]
 r = np.linalg.norm(pcd[:, rev], axis=0)
