@@ -30,3 +30,8 @@ def get_logger(name, filepath, level=logging.DEBUG, format="[%(levelname)s]:%(na
                 "path of logfile {} is not a valid file, considered as no logfile.".format(os.path.abspath(filepath)))
 
     return logger
+
+
+if __name__ == "__main__":
+    logger = get_logger("abc", "./log.log")
+    logger.warning("test")

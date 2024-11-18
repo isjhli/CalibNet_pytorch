@@ -1,12 +1,17 @@
 import argparse
 import os
 import yaml
+
 import torch
 import numpy as np
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import torch.nn as nn
+
+import utils
 from mylogger import print_highlight, print_warning
 from dataset import BaseKITTIDataset, KITTI_perturb
 from utils.transform import UniformTransformSE3
-from torch.utils.data import DataLoader
 from models.CalibNet import CalibNet
 from mylogger import get_logger
 import loss as loss_utils
@@ -24,7 +29,7 @@ def options():
     parser.add_argument("--max_randomly", type=bool, default=True)
     # dataloader
     parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--num_workers", type=int, default=12)
+    parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--pin_memory", type=bool, default=False,
                         help="set it to False if your CPU memory is insufficient")
     # schedule
@@ -50,6 +55,60 @@ def options():
     parser.add_argument("--resize_ratio", type=float, nargs=2, default=[1.0, 1.0])
     # if CUDA is out of memory, please reduce batch_size, pcd_sample or inner_iter
     return parser.parse_args()
+
+
+@torch.no_grad()
+def val(args, model: CalibNet, val_loader: DataLoader):
+    model.eval()
+    device = model.device
+    tqdm_console = tqdm(total=len(val_loader), desc="Val")
+    photo_loss = loss_utils.Photo_Loss(args.scale)
+    chamfer_loss = loss_utils.ChamferDistanceLoss(args.scale, "mean")
+    alpha = float(args.alpha)
+    beta = float(args.beta)
+    total_dR = 0
+    total_dT = 0
+    total_loss = 0
+    total_se3_loss = 0
+    with tqdm_console:
+        tqdm_console.set_description_str("Val")
+        for batch in val_loader:
+            rgb_img = batch["img"].to(device)
+            B = rgb_img.size(0)
+            pcd_range = batch["pcd_range"].to(device)
+            calibed_depth_img = batch["depth_img"].to(device)
+            calibed_pcd = batch["pcd"].to(device)
+            uncalibed_depth_img = batch["uncalibed_depth_img"].to(device)
+            uncalibed_pcd = batch["uncalibed_pcd"].to(device)
+            InTran = batch["InTran"][0].to(device)
+            igt = batch["igt"].to(device)
+            img_shape = rgb_img.shape[-2:]
+            depth_generator = utils.transform.DepthImgGenerator(img_shape, InTran, pcd_range,
+                                                                CONFIG["dataset"]["pooling"])
+            # model(rgb_img, uncalibed_depth_img)
+            g0 = torch.eye(4).repeat(B, 1, 1).to(device)
+            for _ in range(args.inner_iter):
+                twist_rot, twist_tsl = model(rgb_img, uncalibed_depth_img)
+                extran = utils.se3.exp(torch.cat([twist_rot, twist_tsl], dim=1))
+                uncalibed_depth_img, uncalibed_pcd = depth_generator(extran, uncalibed_pcd)
+                g0 = extran.bmm(g0)
+            err_g = g0.bmm(igt)
+            dR, dT = loss_utils.geodesic_distance(err_g)
+            total_dR += dR.item()
+            total_dT += dT.item()
+            se3_loss = torch.linalg.norm(utils.se3.log(err_g), dim=1).mean() / 6
+            total_se3_loss += se3_loss.item()
+            loss1 = photo_loss(calibed_depth_img, uncalibed_depth_img)
+            loss2 = chamfer_loss(calibed_pcd, uncalibed_pcd)
+            loss = alpha * loss1 + beta * loss2
+            total_loss += loss.item()
+            tqdm_console.set_postfix_str("dR:{:.4f}, dT:{:.4f}, se3_loss:{:.4f}".format(loss1, loss2, se3_loss))
+            tqdm_console.update(1)
+    total_dR /= len(val_loader)
+    total_dT /= len(val_loader)
+    total_se3_loss /= len(val_loader)
+    total_loss = total_loss / len(val_loader)
+    return total_loss, total_dR, total_dT, total_se3_loss
 
 
 def train(args, chkpt, train_loader: DataLoader, val_loader: DataLoader):
@@ -84,7 +143,7 @@ def train(args, chkpt, train_loader: DataLoader, val_loader: DataLoader):
         args.device = "cpu"
         print_warning("CUDA is not available, use CPU to run")
     log_mode = "a" if chkpt is not None else "w"
-    logger = get_logger("{name}|Train".format(name=args.name), os.path.join(args.log_dir, args.name + ".log"), log_mode)
+    logger = get_logger("{name}|Train".format(name=args.name), os.path.join(args.log_dir, args.name + ".log"), mode=log_mode)
     if chkpt is None:
         logger.debug(args)
         print_highlight("Start training from epoch {}".format(start_epoch))
@@ -92,10 +151,89 @@ def train(args, chkpt, train_loader: DataLoader, val_loader: DataLoader):
         print_highlight("Resume from epoch {}".format(start_epoch))
     del chkpt
     photo_loss = loss_utils.Photo_Loss(args.scale)
+    chamfer_loss = loss_utils.ChamferDistanceLoss(args.scale, "mean")
     alpha = float(args.alpha)
     beta = float(args.beta)
     for epoch in range(start_epoch, args.epoch):
         model.train()
+        tqdm_console = tqdm(total=len(train_loader), desc="Train")
+        total_photo_loss = 0
+        total_chamfer_loss = 0
+        with tqdm_console:
+            tqdm_console.set_description_str("Epoch {:03d}|{:03d}".format(epoch + 1, args.epoch))
+            for batch in train_loader:
+                optimizer.zero_grad()
+                rgb_img = batch["img"].to(device)
+                B = rgb_img.shape[0]
+                pcd_range = batch["pcd_range"].to(device)
+                calibed_depth_img = batch["depth_img"].to(device)
+                calibed_pcd = batch["pcd"].to(device)
+                uncalibed_pcd = batch["uncalibed_pcd"].to(device)
+                uncalibed_depth_img = batch["uncalibed_depth_img"].to(device)
+                InTran = batch["InTran"][0].to(device)
+                igt = batch["igt"].to(device)
+                img_shape = rgb_img.shape[-2:]
+                depth_generator = utils.transform.DepthImgGenerator(img_shape, InTran, pcd_range,
+                                                                    CONFIG["dataset"]["pooling"])
+                # model(rgb_img, uncalibed_depth_img)
+                Tcl = torch.eye(4).repeat(B, 1, 1).to(device)
+                # model.eval()
+                for _ in range(args.inner_iter):
+                    # 先前向传播，得到补偿值
+                    twist_rot, twist_tsl = model(rgb_img, uncalibed_depth_img)
+                    iter_Tcl = utils.se3.exp(torch.cat([twist_rot, twist_tsl], dim=1))
+                    # 然后再用这个补偿值对 uncalibed_pcd 进行矫正，重新计算深度图
+                    uncalibed_depth_img, uncalibed_pcd = depth_generator(iter_Tcl, uncalibed_pcd)
+                    # 初始变换右乘更新
+                    Tcl = Tcl.bmm(iter_Tcl)  # right product (chronologically left product)
+                dR, dT = loss_utils.geodesic_distance(Tcl.bmm(igt))
+                # model.train()
+                loss1 = photo_loss(calibed_depth_img, uncalibed_depth_img)
+                loss2 = chamfer_loss(calibed_pcd, uncalibed_pcd)
+                loss = alpha * loss1 + beta * loss2
+                loss.backward()
+                # 梯度裁剪，防止梯度爆炸
+                nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+                optimizer.step()
+                tqdm_console.set_postfix_str(
+                    'P:{:.3f}, c:{:.3f}, dR:{:.3f}, dT:{:.3f}'.format(loss1.item(), loss2.item(), dR.item(), dT.item()))
+                tqdm_console.update()
+                total_photo_loss += loss1.item()
+                total_chamfer_loss += loss2.item()
+        N_loader = len(train_loader)
+        total_photo_loss /= N_loader
+        total_chamfer_loss /= N_loader
+        total_loss = alpha * total_photo_loss + beta * total_chamfer_loss
+        tqdm_console.set_postfix_str(
+            "loss: {:.3f}, photo: {:.3f}, chamfer: {:.3f}".format(total_loss, total_photo_loss, total_chamfer_loss))
+        tqdm_console.update()
+        tqdm_console.close()
+        logger.info("Epoch {:03d}|{:03d}, train loss:{:.4f}".format(epoch + 1, args.epoch, total_loss))
+        scheduler.step()
+        val_loss, loss_dR, loss_dT, loss_se3 = val(args, model, val_loader)  # float
+        if loss_se3 < min_loss:
+            min_loss = loss_se3
+            torch.save(dict(
+                model=model.state_dict(),
+                optimizer=optimizer.state_dict(),
+                scheduler=scheduler.state_dict(),
+                min_loss=min_loss,
+                epoch=epoch,
+                args=args.__dict__,
+                config=CONFIG
+            ), os.path.join(args.checkpoint_dir, "{name}_best_pth".format(name=args.name)))
+            logger.debug("Best model saved (Epoch {:d})".format(epoch + 1))
+            print_highlight("Best model (Epoch {:d})".format(epoch + 1))
+        torch.save(dict(
+            model=model.state_dict(),
+            optimizer=optimizer.state_dict(),
+            scheduler=scheduler.state_dict(),
+            min_loss=min_loss,
+            epoch=epoch,
+            args=args.__dict__,
+            config=CONFIG
+        ), os.path.join(args.checkpoint_dir, "{name}_last_pth".format(name=args.name)))
+        logger.info("Evaluate loss_dR:{:.6f}, loss_dT:{:.6f}, se3_loss:{:.6f}".format(loss_dR, loss_dT, loss_se3))
 
 
 if __name__ == "__main__":
@@ -164,7 +302,7 @@ if __name__ == "__main__":
     # dataloader
     train_dataloader = DataLoader(train_dataset, args.batch_size, shuffle=False, num_workers=args.num_workers,
                                   pin_memory=args.pin_memory, drop_last=train_drop_last)
-    val_dataloader = DataLoader(val_dataset, args.batch_size, shuffle=False, num_workers=args.num_workers + 8,
+    val_dataloader = DataLoader(val_dataset, args.batch_size, shuffle=False, num_workers=args.num_workers,
                                 pin_memory=args.pin_memory, drop_last=val_drop_last)
 
     train(args, chkpt, train_dataloader, val_dataloader)

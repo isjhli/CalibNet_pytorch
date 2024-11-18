@@ -77,7 +77,7 @@ class Resampler:
             idx = idx[:self.num]
             return x[idx]  # (self.num, dim)
         else:
-            idx = np.hstack([idx, np.random.choice(num_points, num_points - self.num, replace=True)])
+            idx = np.hstack([idx, np.random.choice(num_points, self.num - num_points, replace=True)])
             return x[idx]  # (self.num, dim)
 
 
@@ -199,7 +199,7 @@ class KITTI_perturb(Dataset):
         else:
             igt = se3.exp(self.perturb[:, index, :])  # [1, 6] -> [1, 4, 4]
             _uncalibed_pcd = se3.transform(igt, calibed_pcd[None, :, :]).squeeze(0)  # [3, N]
-            igt.squeeze(0)  # [4, 4]
+            igt.squeeze_(0)  # [4, 4]
 
         _uncalibed_depth_img = torch.zeros_like(data["depth_img"], dtype=torch.float32)
         proj_pcd = InTran.matmul(_uncalibed_pcd)  # [3, 3] x [3, N] -> [3, N]
@@ -222,7 +222,7 @@ if __name__ == '__main__':
     matplotlib.use('Agg')
     from matplotlib import pyplot as plt
 
-    base_dataset = BaseKITTIDataset("data", 1, seqs=["00"], skip_frame=3, cam_id=0)
+    base_dataset = BaseKITTIDataset("data", 1, seqs=["00"], skip_frame=3, cam_id=2)
     dataset = KITTI_perturb(base_dataset, 30, 3)
     data = dataset[2]
     for key, value in data.items():

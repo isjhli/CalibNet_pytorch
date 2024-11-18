@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ResNet18 import ResNet18
+from .ResNet18 import ResNet18
 
 
 class Aggregation(nn.Module):

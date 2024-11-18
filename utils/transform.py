@@ -2,7 +2,7 @@ from . import so3, se3
 import torch
 import numpy as np
 from math import pi as PI
-from collections import Iterable
+from collections.abc import Iterable
 
 
 class RandomTransformSE3():
@@ -50,6 +50,8 @@ class RandomTransformSE3():
             # 前三维： xyz， 后三维： normal
             return torch.cat([se3.transform(g, p0[:3, :]), so3.transform(g[:, :3, :3], p0[3:, :])],
                              dim=1)  # [1, 4, 4] x [6, N] -> [6, N]
+        else:
+            return se3.transform(g, p0)
 
     def transform(self, tensor):
         x = self.generate_transform()
@@ -137,8 +139,8 @@ class DepthImgGenerator:
         self.InTran = self.InTran.to(pcd.device)
         pcd = se3.transform(ExTran, pcd)  # [B, 4, 4] x [B, 3, N] -> [B, 3, N]
         proj_pcd = torch.bmm(self.InTran.repeat(B, 1, 1), pcd)  # [B, 3, 3] x [B, 3, N] -> [B, 3, N]
-        proj_x = proj_pcd[:, 0, :] / proj_pcd[:, 2, :].type(torch.long)  # [B, N]
-        proj_y = proj_pcd[:, 1, :] / proj_pcd[:, 2, :].type(torch.long)  # [B, N]
+        proj_x = (proj_pcd[:, 0, :] / proj_pcd[:, 2, :]).type(torch.long)  # [B, N]
+        proj_y = (proj_pcd[:, 1, :] / proj_pcd[:, 2, :]).type(torch.long)  # [B, N]
         rev = ((proj_x >= 0) * (proj_x < W) * (proj_y >= 0) * (proj_y < H) * (proj_pcd[:, 2, :] > 0)).type(
             torch.bool)  # [B, N]
         batch_depth_img = torch.zeros(B, H, W, dtype=torch.float32).to(pcd.device)  # [B, H, W]

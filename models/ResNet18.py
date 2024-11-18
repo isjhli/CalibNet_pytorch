@@ -75,7 +75,7 @@ class ResNet18(nn.Module):
         # TODO layer3 和 layer4 没有按照论文中对宽和高进行减半
         self.layer3 = nn.Sequential(
             BasicBlock(2 * planes, 4 * planes, stride=1, dilation=2, downsample=nn.Sequential(
-                nn.Conv2d(2 * planes, 4 * planes, 1 ,stride=1, bias=False),
+                nn.Conv2d(2 * planes, 4 * planes, 1, stride=1, bias=False),
                 nn.BatchNorm2d(4 * planes)
             )),
             BasicBlock(4 * planes, 4 * planes, stride=1, dilation=2)
@@ -97,6 +97,7 @@ class ResNet18(nn.Module):
         out3 = self.layer3(out2)
         out4 = self.layer4(out3)
         return out1, out2, out3, out4
+
 
 if __name__ == '__main__':
     model = ResNet18()

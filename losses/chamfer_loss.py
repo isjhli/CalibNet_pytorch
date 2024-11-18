@@ -1,13 +1,14 @@
+from .chamfer_distance.chamfer_distance import ChamferDistance
 import torch
 import torch.nn as nn
 import os
 import sys
 
 sys.path.append(os.path.dirname(__file__))
-from chamfer_distance.chamfer_distance import ChamferDistance
 
 
-# copied from https://github.com/vinits5/pcrnet_pytorch/tree/master/pcrnet/losses
+# copied from
+# https://github.com/vinits5/pcrnet_pytorch/tree/master/pcrnet/losses
 
 def chamfer_distance(template: torch.Tensor, source: torch.Tensor):
     cost_p0_p1, cost_p1_p0 = ChamferDistance()(template, source)
