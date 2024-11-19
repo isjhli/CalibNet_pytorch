@@ -62,7 +62,6 @@ def test(args, chkpt: dict, test_loader):
         uncalibed_depth_img = batch['uncalibed_depth_img'].to(device)
         InTran = batch['InTran'][0].to(device)
         igt = batch['igt'].to(device)
-        gt = batch['gt'].to(device)
         img_shape = rgb_img.shape[-2:]
         H, W = img_shape
         depth_generator = utils.transform.DepthImgGenerator(img_shape, InTran, pcd_range, CONFIG["dataset"]["pooling"])
@@ -80,12 +79,12 @@ def test(args, chkpt: dict, test_loader):
         tsl_dx = tsl_dx.reshape(-1)
         res_npy[i, :] = np.abs(np.concatenate([rot_dx, tsl_dx]))
         logger.info("[{:05d}|{:05d}], mdx:{:.4f}".format(i + 1, len(test_loader), res_npy[i, :].mean().item()))
-        utils.common.SaveProjImg(os.path.join(args.res_dir, "img", "demo_proj_{}_1uncalib.png".format(i)), rgb_img,
-                                 uncalibed_pcd, pcd_range, InTran)
-        utils.common.SaveProjImg(os.path.join(args.res_dir, "img", "demo_proj_{}_2calib.png".format(i)), rgb_img,
-                                 corrected_pcd, pcd_range, InTran)
-        utils.common.SaveProjImg(os.path.join(args.res_dir, "img", "demo_proj_{}_3gt.png".format(i)), rgb_img,
-                                 calibed_pcd, pcd_range, InTran)
+        # utils.common.SaveProjImg(os.path.join(args.res_dir, "img", "demo_proj_{}_1uncalib.png".format(i)), rgb_img,
+        #                          uncalibed_pcd, pcd_range, InTran)
+        # utils.common.SaveProjImg(os.path.join(args.res_dir, "img", "demo_proj_{}_2calib.png".format(i)), rgb_img,
+        #                          corrected_pcd, pcd_range, InTran)
+        # utils.common.SaveProjImg(os.path.join(args.res_dir, "img", "demo_proj_{}_3gt.png".format(i)), rgb_img,
+        #                          calibed_pcd, pcd_range, InTran)
 
     np.save(os.path.join(args.res_dir, "{}.npy".format(args.name)), res_npy)
     logger.info("Angle error (deg): X:{:.4f}, Y:{:.4f}, Z:{:.4f}".format(*np.degrees(np.mean(res_npy[:, :3], axis=0))))
