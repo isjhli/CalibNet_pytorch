@@ -54,7 +54,7 @@ class KITTIFilter:
                 pcd_zero = pcd_xyz - center
                 # 通过内积判断法线与坐标方向是否一致
                 pcd_norm *= np.where(np.sum(pcd_zero * pcd_norm, axis=1, keepdims=True) < 0, -1, 1)
-                return np.hstack([pcd_xyz, pcd_norm])
+                return np.hstack([pcd_zero, pcd_norm])
             else:
                 raise RuntimeError("Unknown concat mode: %s" % self.concat)
 
@@ -193,9 +193,11 @@ class KITTI_perturb(Dataset):
         H, W = data["img"].shape[-2:]  # (RH, RW)
         calibed_pcd = data["pcd"]  # [3, N]
         InTran = data["InTran"]  # [3, 3]
+        gt = None
         if self.file is None:
             _uncalibed_pcd = self.transform(calibed_pcd[None, :, :]).squeeze(0)  # [3, N]
             igt = self.transform.igt.squeeze(0)  # [4, 4]
+            gt = self.transform.gt.squeeze(0)
         else:
             igt = se3.exp(self.perturb[:, index, :])  # [1, 6] -> [1, 4, 4]
             _uncalibed_pcd = se3.transform(igt, calibed_pcd[None, :, :]).squeeze(0)  # [3, N]
@@ -209,7 +211,7 @@ class KITTI_perturb(Dataset):
         proj_x = proj_x[rev]
         proj_y = proj_y[rev]
         _uncalibed_depth_img[proj_y, proj_x] = data["pcd_range"][rev]
-        new_data = dict(uncalibed_pcd=_uncalibed_pcd, uncalibed_depth_img=_uncalibed_depth_img, igt=igt)
+        new_data = dict(uncalibed_pcd=_uncalibed_pcd, uncalibed_depth_img=_uncalibed_depth_img, igt=igt, gt=gt)
         data.update(new_data)
         data["depth_img"] = self.pooling(data["depth_img"][None, ...])
         data["uncalibed_depth_img"] = self.pooling(data["uncalibed_depth_img"][None, ...])

@@ -20,7 +20,7 @@ class Aggregation(nn.Module):
         self.tr_drop = nn.Dropout2d(0.2)
         self.rot_drop = nn.Dropout2d(0.2)
         self.tr_pool = nn.AdaptiveAvgPool2d(final_feat)
-        self.rot_pool = nn.AdaptiveMaxPool2d(final_feat)
+        self.rot_pool = nn.AdaptiveAvgPool2d(final_feat)
         self.fc1 = nn.Linear(planes * final_feat[0] * final_feat[1], 3)
         self.fc2 = nn.Linear(planes * final_feat[0] * final_feat[1], 3)
         for m in self.modules():
@@ -28,8 +28,8 @@ class Aggregation(nn.Module):
                 nn.init.kaiming_normal_(m.weight.data, mode='fan_in')
                 if m.bias is not None:
                     m.bias.data.zero_()
-        nn.init.kaiming_normal_(self.fc1.weight, 0.1)
-        nn.init.kaiming_normal_(self.fc2.weight, 0.1)
+        nn.init.xavier_normal_(self.fc1.weight, 0.1)
+        nn.init.xavier_normal_(self.fc2.weight, 0.1)
 
     def forward(self, x:torch.Tensor):
         x = self.conv1(x)

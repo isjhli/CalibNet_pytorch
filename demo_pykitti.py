@@ -37,7 +37,7 @@ intern = calib.K_cam0
 extern = calib.T_cam0_velo
 
 pcd = data.get_velo(150).T  # (4, N)
-img = np.asarray(data.get_cam0(150))
+img = np.asarray(data.get_cam2(150))
 H, W = img.shape[:2]
 
 pcd[-1, :] = 1.0

@@ -61,9 +61,9 @@ def geodesic_distance(x: torch.Tensor) -> tuple:
     R = x[:, :3, :3]  # [B, 3, 3] rotation
     T = x[:, :3, 3]  # [B, 3] translation
     dR = so3.log(R)  # [B, 3]
-    dR = F.mse_loss(dR, torch.zeros_like(dR).to(dR), reduction="none").mean(dim=0)  # [B, 3] -> [B, 1]
+    dR = F.mse_loss(dR, torch.zeros_like(dR).to(dR), reduction="none").mean(dim=1)  # [B, 3] -> [B, 1]
     dR = torch.sqrt(dR).mean(dim=0)  # [B, 1] -> [1,] Rotation RMSE (mean in batch)
-    dT = F.mse_loss(T, torch.zeros_like(T).to(T), reduction="none").mean(dim=0)  # [B, 3] -> [B, 1]
+    dT = F.mse_loss(T, torch.zeros_like(T).to(T), reduction="none").mean(dim=1)  # [B, 3] -> [B, 1]
     dT = torch.sqrt(dT).mean(dim=0)  # [B, 1] -> [1,] Translation RMSE (mean in batch)
     return dR, dT
 

@@ -5,7 +5,7 @@ from math import pi as PI
 from collections.abc import Iterable
 
 
-class RandomTransformSE3():
+class RandomTransformSE3:
     """ rigid motion """
 
     def __init__(self, max_deg, max_tran, mag_randomly=True, concat=False):

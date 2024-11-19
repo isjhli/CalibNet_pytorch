@@ -19,15 +19,20 @@ def get_logger(name, filepath, level=logging.DEBUG, format="[%(levelname)s]:%(na
     # tx.setFormatter(logging.Formatter(format))
     # tx.setLevel(level)
     # logger.addHandler(tx)
-    if filepath:
-        if os.path.exists(filepath):
-            fh = logging.FileHandler(filename=filepath, mode=mode)
-            fh.setFormatter(logging.Formatter(format))
-            fh.setLevel(level)
-            logger.addHandler(fh)
-        else:
-            logger.warning(
-                "path of logfile {} is not a valid file, considered as no logfile.".format(os.path.abspath(filepath)))
+
+    fh = logging.FileHandler(filename=filepath, mode=mode)
+    fh.setFormatter(logging.Formatter(format))
+    fh.setLevel(level)
+    logger.addHandler(fh)
+    # if filepath:
+    #     if os.path.exists(filepath):
+    #         fh = logging.FileHandler(filename=filepath, mode=mode)
+    #         fh.setFormatter(logging.Formatter(format))
+    #         fh.setLevel(level)
+    #         logger.addHandler(fh)
+    #     else:
+    #         logger.warning(
+    #             "path of logfile {} is not a valid file, considered as no logfile.".format(os.path.abspath(filepath)))
 
     return logger
 

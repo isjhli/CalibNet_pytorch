@@ -114,7 +114,7 @@ def val(args, model: CalibNet, val_loader: DataLoader):
 def train(args, chkpt, train_loader: DataLoader, val_loader: DataLoader):
     device = torch.device(args.device)
     model = CalibNet(backbone_pretrained=False, depth_scale=args.scale)
-    model = model.to(device)
+    model.to(device)
     if args.optim == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr0, momentum=args.momentum,
                                     weight_decay=args.weight_decay)
@@ -193,7 +193,7 @@ def train(args, chkpt, train_loader: DataLoader, val_loader: DataLoader):
                 loss = alpha * loss1 + beta * loss2
                 loss.backward()
                 # 梯度裁剪，防止梯度爆炸
-                nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+                nn.utils.clip_grad_value_(model.parameters(), args.clip_grad)
                 optimizer.step()
                 tqdm_console.set_postfix_str(
                     'P:{:.3f}, c:{:.3f}, dR:{:.3f}, dT:{:.3f}'.format(loss1.item(), loss2.item(), dR.item(), dT.item()))
@@ -221,7 +221,7 @@ def train(args, chkpt, train_loader: DataLoader, val_loader: DataLoader):
                 epoch=epoch,
                 args=args.__dict__,
                 config=CONFIG
-            ), os.path.join(args.checkpoint_dir, "{name}_best_pth".format(name=args.name)))
+            ), os.path.join(args.checkpoint_dir, "{name}_best.pth".format(name=args.name)))
             logger.debug("Best model saved (Epoch {:d})".format(epoch + 1))
             print_highlight("Best model (Epoch {:d})".format(epoch + 1))
         torch.save(dict(
@@ -232,7 +232,7 @@ def train(args, chkpt, train_loader: DataLoader, val_loader: DataLoader):
             epoch=epoch,
             args=args.__dict__,
             config=CONFIG
-        ), os.path.join(args.checkpoint_dir, "{name}_last_pth".format(name=args.name)))
+        ), os.path.join(args.checkpoint_dir, "{name}_last.pth".format(name=args.name)))
         logger.info("Evaluate loss_dR:{:.6f}, loss_dT:{:.6f}, se3_loss:{:.6f}".format(loss_dR, loss_dT, loss_se3))
 
 

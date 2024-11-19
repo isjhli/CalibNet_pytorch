@@ -8,4 +8,7 @@
 
 /**/*cache*/
 
-/checkpoint/*_pth
+/checkpoint/*.pth
+/res/
+
+/log/*
